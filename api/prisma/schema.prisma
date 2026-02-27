@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String        @id @default(cuid())
+  name        String
+  email       String        @unique
+  password    String
+  createdAt   DateTime      @default(now())
+  memberships CompanyUser[]
+  entries     Entry[]       @relation("CreatedBy")
+}
+
+model Company {
+  id             String          @id @default(cuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  accounts       Account[]
+  members        CompanyUser[]
+  costCenters    CostCenter[]
+  entries        Entry[]
+  paymentMethods PaymentMethod[]
+}
+
+model CompanyUser {
+  id        String     @id @default(cuid())
+  role      MemberRole @default(USER)
+  createdAt DateTime   @default(now())
+  userId    String
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
+
+  @@unique([userId, companyId])
+  @@index([companyId], map: "CompanyUser_companyId_fkey")
+}
+
+model Account {
+  id        String    @id @default(cuid())
+  name      String
+  type      EntryType
+  group     String
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id])
+  entries   Entry[]
+
+  @@index([companyId])
+  @@index([companyId, type])
+  @@index([companyId, group])
+}
+
+model CostCenter {
+  id           String       @id @default(cuid())
+  name         String
+  createdAt    DateTime     @default(now())
+  companyId    String
+  type         EntryType    @default(EXPENSE)
+  expenseClass ExpenseClass @default(VARIABLE)
+  company      Company      @relation(fields: [companyId], references: [id])
+  entries      Entry[]
+
+  @@index([companyId, type])
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  companyId String
+  entries   Entry[]
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Entry {
+  id              String         @id @default(cuid())
+  description     String
+  type            EntryType
+  amount          Decimal        @db.Decimal(15, 2)
+  competenceMonth String
+  createdAt       DateTime       @default(now())
+  companyId       String
+  accountId       String
+  costCenterId    String?
+  createdById     String
+  date            DateTime?
+  paymentMethodId String?
+  account         Account        @relation(fields: [accountId], references: [id])
+  company         Company        @relation(fields: [companyId], references: [id])
+  costCenter      CostCenter?    @relation(fields: [costCenterId], references: [id])
+  createdBy       User           @relation("CreatedBy", fields: [createdById], references: [id])
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id], map: "Entry_paymentMethodId_fk")
+
+  @@index([companyId, competenceMonth])
+  @@index([companyId, costCenterId, competenceMonth])
+  @@index([companyId, paymentMethodId, competenceMonth])
+  @@index([companyId, accountId, competenceMonth])
+  @@index([accountId], map: "Entry_accountId_fkey")
+  @@index([costCenterId], map: "Entry_costCenterId_fkey")
+  @@index([createdById], map: "Entry_createdById_fkey")
+  @@index([paymentMethodId], map: "Entry_paymentMethodId_fk")
+}
+
+enum EntryType {
+  REVENUE
+  EXPENSE
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  USER
+}
+
+/// * ✅ NOVO: classificação da despesa
+enum ExpenseClass {
+  FIXED
+  VARIABLE
+}
